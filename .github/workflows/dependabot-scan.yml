@@ -46,7 +46,7 @@ jobs:
 
       - name: Create issue for missing configurations
         if: github.event_name != 'push'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
