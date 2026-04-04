@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-scripts:
+    name: Validate Scanner Scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check shell script syntax
+        run: |
+          bash -n scripts/scan-dependabot.sh
+
+      - name: Verify scripts are executable
+        run: |
+          test -x scripts/scan-dependabot.sh || (echo "scan-dependabot.sh is not executable" && exit 1)
+
+      - name: Run shellcheck on scripts
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './scripts'
