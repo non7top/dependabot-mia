@@ -4,47 +4,58 @@ A **reusable GitHub Action** that automatically scans repositories for missing D
 
 ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Composite-blue)
 ![License](https://img.shields.io/github/license/non7top/dependabot-mia)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/non7top/dependabot-mia)
 
 ## Features
 
-- 🔍 **Auto-detection**: Identifies project ecosystems by scanning for indicator files
-- ⚠️ **Missing Config Alerts**: Detects when project ecosystems lack Dependabot configuration
-- 📋 **Recommended Configs**: Provides ready-to-use dependabot.yml snippets
-- 🎫 **Auto Issue Creation**: Optionally creates GitHub issues for missing configurations
-- 📤 **Action Outputs**: Exposes scan results for use in downstream workflow steps
-- 🔄 **Flexible Configuration**: Customize behavior with inputs
+- **30+ supported ecosystems** - From npm to vcpkg
+- **Directory-level detection** - Scans subdirectories, not just root
+- **Auto issue/PR creation** - Creates issues or PRs with suggested changes
+- **Configurable behavior** - Control failure, issue creation, and PR generation
+- **Action outputs** - Expose scan results for downstream workflow steps
 
 ## Supported Ecosystems
 
 | Ecosystem | Indicator Files |
 |-----------|----------------|
-| npm/yarn/bun | package.json, bun.lockb |
+| npm | package.json |
+| bun | bun.lockb, bun.lock |
 | pip | requirements.txt, setup.py, pyproject.toml, Pipfile |
-| go-modules | go.mod |
 | bundler | Gemfile |
 | cargo | Cargo.toml |
 | nuget | *.csproj, *.fsproj, packages.config |
 | composer | composer.json |
-| gradle/maven | build.gradle, pom.xml |
-| docker | Dockerfile, docker-compose.yml |
+| gomod | go.mod |
+| gradle | build.gradle, settings.gradle |
+| maven | pom.xml |
+| docker | Dockerfile |
+| docker-compose | docker-compose.yml |
 | github-actions | .github/workflows/*.yml |
 | terraform | *.tf |
+| opentofu | *.tofu |
+| bazel | BUILD, WORKSPACE |
+| conda | environment.yml |
 | pub | pubspec.yaml |
 | swift | Package.swift |
-| submodules | .gitmodules |
+| gitsubmodule | .gitmodules |
 | devcontainers | devcontainer.json |
 | elm | elm.json |
-| hex | mix.exs |
+| mix | mix.exs |
+| helm | Chart.yaml |
+| julia | Project.toml |
+| pre-commit | .pre-commit-config.yaml |
+| uv | uv.lock |
+| dotnet-sdk | *.csproj, global.json |
+| rust-toolchain | rust-toolchain.toml |
+| vcpkg | vcpkg.json |
 
 ## Usage
 
-### Basic Usage
-
-Add this to your workflow:
+### Basic
 
 ```yaml
 - name: Scan for missing Dependabot configs
-  uses: non7top/dependabot-mia@master
+  uses: non7top/dependabot-mia@v1
 ```
 
 ### Full Example
@@ -54,12 +65,13 @@ name: Dependabot Scan
 
 on:
   schedule:
-    - cron: '0 8 * * 1'  # Weekly on Monday
-  workflow_dispatch:      # Manual trigger
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   issues: write
+  pull-requests: write
 
 jobs:
   scan:
@@ -67,70 +79,47 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Run Dependabot Scanner
+      - name: Run scanner
         id: scanner
-        uses: non7top/dependabot-mia@master
+        uses: non7top/dependabot-mia@v1
         with:
-          # Optional: Comma-separated list of ecosystems to check
-          # Leave empty for auto-detection of all supported ecosystems
-          ecosystems: ''
-
-          # Whether to fail the workflow if missing configs are detected
-          # Set to 'false' to just warn without failing
           fail-on-missing: 'true'
-
-          # Create a GitHub issue when missing configurations are detected
           create-issue: 'true'
-
-          # Labels to add to created issues
+          create-pr: 'false'
           labels: 'dependabot-scan,security'
-
-      - name: Use scan results
-        if: always()
-        run: |
-          echo "Scan result: ${{ steps.scanner.outputs.scan-result }}"
-          echo "Found: ${{ steps.scanner.outputs.found-ecosystems }}"
-          echo "Missing: ${{ steps.scanner.outputs.missing-ecosystems }}"
 ```
 
-### Using as Part of CI
+### CI Integration
 
 ```yaml
-name: CI
-
-on: [push, pull_request]
-
-jobs:
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Check Dependabot configuration
-        uses: non7top/dependabot-mia@master
-        with:
-          fail-on-missing: 'true'
-          create-issue: 'false'  # Don't create issues in CI
+- name: Check Dependabot config
+  uses: non7top/dependabot-mia@v1
+  with:
+    fail-on-missing: 'true'
+    create-issue: 'false'
+    create-pr: 'false'
 ```
 
 ## Inputs
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `ecosystems` | Comma-separated list of ecosystems to check (empty = auto-detect) | false | `''` |
+| `ecosystems` | Comma-separated list to check (empty = auto-detect) | false | `''` |
 | `fail-on-missing` | Fail workflow if missing configs detected | false | `'true'` |
 | `create-issue` | Create GitHub issue for missing configs | false | `'true'` |
+| `create-pr` | Create PR with suggested changes | false | `'false'` |
 | `labels` | Labels for created issues | false | `'dependabot-scan,security,good-first-issue'` |
-| `token` | GitHub token for API access | false | `${{ github.token }}` |
+| `branch-name` | Branch name for PR creation | false | `'dependabot-mia/scan-${{ github.run_id }}'` |
+| `token` | GitHub token | false | `${{ github.token }}` |
 
 ## Outputs
 
 | Output | Description |
 |--------|-------------|
 | `scan-result` | `PASS` or `FAIL` |
-| `found-ecosystems` | Comma-separated list of detected ecosystems |
-| `missing-ecosystems` | Comma-separated list of ecosystems missing configuration |
-| `scan-output` | Full scanner output text |
+| `found-ecosystems` | Count of detected ecosystems |
+| `missing-ecosystems` | Count of missing configurations |
+| `scan-output` | Full scanner output |
 
 ## Example Output
 
@@ -142,65 +131,36 @@ jobs:
 Scanning repository: .
 Date: 2026-04-04
 
-✓ Found .github/dependabot.yml
+Found .github/dependabot.yml
 
 ----------------------------------------------
   Scanning for Project Files
 ----------------------------------------------
 
-✓ npm - Configured in dependabot.yml
-✗ docker - MISSING Dependabot configuration
-✗ github-actions - MISSING Dependabot configuration
+  Configured: github-actions (directory: /)
+  Missing: docker (directory: /)
+  Missing: npm (directory: /client)
 
 ----------------------------------------------
   Scan Summary
 ----------------------------------------------
 
-Found 3 ecosystem(s): npm docker github-actions
+Total ecosystems found: 3
+Configured: 1
+Missing: 2
 
-MISSING configurations for: docker github-actions
+Result: FAIL
 ```
 
 ## Local Testing
 
-You can test the scanner locally:
-
 ```bash
-# Clone the repository
 git clone https://github.com/non7top/dependabot-mia.git
 cd dependabot-mia
-
-# Run the scanner
 chmod +x scripts/scan-dependabot.sh
-./scripts/scan-dependabot.sh /path/to/your/repo
-```
-
-## Development
-
-### Project Structure
-
-```
-dependabot-mia/
-├── action.yml                     # GitHub Action definition
-├── scripts/
-│   └── scan-dependabot.sh         # Scanner script
-├── .github/
-│   ├── workflows/
-│   │   ├── dependabot-scan.yml    # Self-test workflow
-│   │   └── ci.yml                 # CI validation
-│   └── dependabot.yml             # This repo's Dependabot config
-├── README.md
-└── LICENSE
-```
-
-### Creating a Release
-
-```bash
-# Tag a release
-git tag -a v1.0.0 -m "Release v1.0.0"
-git push origin v1.0.0
+./scripts/scan-dependabot.sh /path/to/repo
 ```
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+MIT - see [LICENSE](LICENSE)

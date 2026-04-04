@@ -17,6 +17,14 @@ on:
         options:
           - 'true'
           - 'false'
+      create-pr:
+        description: 'Create PR with suggested changes'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
       fail-on-missing:
         description: 'Fail workflow if missing configs detected'
         required: false
@@ -32,8 +40,9 @@ on:
       - 'scripts/scan-dependabot.sh'
 
 permissions:
-  contents: read
+  contents: write
   issues: write
+  pull-requests: write
 
 jobs:
   scan-dependabot:
@@ -51,6 +60,7 @@ jobs:
           ecosystems: ${{ github.event.inputs.ecosystems }}
           fail-on-missing: ${{ github.event.inputs.fail-on-missing || 'true' }}
           create-issue: ${{ github.event.inputs.create-issue || 'true' }}
+          create-pr: ${{ github.event.inputs.create-pr || 'false' }}
           labels: 'dependabot-scan,security,good-first-issue'
 
       - name: Upload scan results
@@ -66,4 +76,6 @@ jobs:
         run: |
           echo "## Scan Result: ${{ steps.scan.outputs.scan-result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
           echo "${{ steps.scan.outputs.scan-output }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

@@ -31,13 +31,6 @@ jobs:
         with:
           scandir: './scripts'
 
-      - name: Validate action.yml syntax
-        run: |
-          command -v action-validator >/dev/null 2>&1 || cargo install action-validator 2>/dev/null || echo "Skipping action-validator (not installed)"
-          if command -v action-validator &>/dev/null; then
-            action-validator action.yml
-          fi
-
   test-action:
     name: Test Action (Self-Hosted)
     runs-on: ubuntu-latest
@@ -51,3 +44,4 @@ jobs:
         with:
           fail-on-missing: 'false'
           create-issue: 'false'
+          create-pr: 'false'

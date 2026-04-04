@@ -19,12 +19,20 @@ inputs:
     description: 'Create a GitHub issue when missing configurations are detected'
     required: false
     default: 'true'
+  create-pr:
+    description: 'Create a PR with suggested dependabot.yml changes'
+    required: false
+    default: 'false'
   labels:
     description: 'Comma-separated list of labels to add to created issues'
     required: false
     default: 'dependabot-scan,security,good-first-issue'
+  branch-name:
+    description: 'Branch name for PR creation (when create-pr is true)'
+    required: false
+    default: 'dependabot-mia/scan-${{ github.run_id }}'
   token:
-    description: 'GitHub token for creating issues'
+    description: 'GitHub token for creating issues/PRs'
     required: false
     default: ${{ github.token }}
 
@@ -49,30 +57,22 @@ runs:
       id: scan
       shell: bash
       run: |
-        # Get the action directory
         ACTION_DIR="${{ github.action_path }}"
-
-        # Make scanner executable
         chmod +x "${ACTION_DIR}/scripts/scan-dependabot.sh"
 
-        # Run scanner
-        SCAN_OUTPUT=$("${ACTION_DIR}/scripts/scan-dependabot.sh" "${{ inputs.ecosystems }}" 2>&1) || true
+        SCAN_OUTPUT=$("${ACTION_DIR}/scripts/scan-dependabot.sh" "." 2>&1) || true
 
-        # Set outputs
-        echo "scan-output<<EOF" >> $GITHUB_OUTPUT
+        echo "scan-output<<SCANEOF" >> $GITHUB_OUTPUT
         echo "$SCAN_OUTPUT" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        echo "SCANEOF" >> $GITHUB_OUTPUT
 
-        # Extract found ecosystems
-        FOUND=$(echo "$SCAN_OUTPUT" | grep -E "Found [0-9]+ ecosystem" | sed 's/Found [0-9]* ecosystem(s): //' || echo "")
+        FOUND=$(echo "$SCAN_OUTPUT" | grep -E "Total ecosystems found:" | awk '{print $NF}' || echo "")
         echo "found-ecosystems=$FOUND" >> $GITHUB_OUTPUT
 
-        # Extract missing ecosystems
-        MISSING=$(echo "$SCAN_OUTPUT" | grep "^MISSING:" | sed 's/MISSING: //' || echo "")
+        MISSING=$(echo "$SCAN_OUTPUT" | grep -E "^Missing:" | awk '{print $NF}' || echo "")
         echo "missing-ecosystems=$MISSING" >> $GITHUB_OUTPUT
 
-        # Determine result
-        if echo "$SCAN_OUTPUT" | grep -q "^MISSING:"; then
+        if echo "$SCAN_OUTPUT" | grep -q "Result: FAIL"; then
           echo "scan-result=FAIL" >> $GITHUB_OUTPUT
           if [[ "${{ inputs.fail-on-missing }}" == "true" ]]; then
             echo "$SCAN_OUTPUT"
@@ -85,19 +85,72 @@ runs:
         echo "$SCAN_OUTPUT"
 
     - name: Create issue for missing configurations
-      if: steps.scan.outputs.scan-result == 'FAIL' && inputs.create-issue == 'true' && inputs.token != ''
+      if: steps.scan.outputs.scan-result == 'FAIL' && inputs.create-issue == 'true'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.token }}
         SCAN_OUTPUT: ${{ steps.scan.outputs.scan-output }}
         ISSUE_LABELS: ${{ inputs.labels }}
-        REPO: ${{ github.repository }}
       run: |
-        echo "Creating issue for missing configurations..."
-        ISSUE_BODY="## Scan Results${SCAN_OUTPUT}"
+        echo "$SCAN_OUTPUT" > /tmp/scan-results.md
+
         gh issue create \
-          --repo "$REPO" \
-          --title "Missing Dependabot Configurations" \
-          --body "$ISSUE_BODY" \
+          --title "Missing Dependabot Configurations Detected" \
+          --body-file /tmp/scan-results.md \
           --label "$ISSUE_LABELS" \
           2>/dev/null || echo "Issue creation skipped"
+
+    - name: Create PR with suggested changes
+      if: steps.scan.outputs.scan-result == 'FAIL' && inputs.create-pr == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        SCAN_OUTPUT: ${{ steps.scan.outputs.scan-output }}
+        BRANCH_NAME: ${{ inputs.branch-name }}
+      run: |
+        if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+          echo "No token available for PR creation"
+          exit 0
+        fi
+
+        # Create new branch
+        git checkout -b "$BRANCH_NAME" 2>/dev/null || {
+          echo "Branch already exists, skipping PR creation"
+          exit 0
+        }
+
+        # Generate dependabot.yml if it doesn't exist
+        if [[ ! -f ".github/dependabot.yml" ]]; then
+          mkdir -p .github
+          echo "version: 2" > .github/dependabot.yml
+          echo "updates:" >> .github/dependabot.yml
+        fi
+
+        # Extract and add missing configurations
+        SCAN_RESULTS=$(echo "$SCAN_OUTPUT" | sed -n '/Recommended dependabot.yml additions:/,/^$/p' | tail -n +2)
+        if [[ -n "$SCAN_RESULTS" ]]; then
+          echo "$SCAN_RESULTS" >> .github/dependabot.yml
+        fi
+
+        # Commit and push
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add .github/dependabot.yml
+        git commit -m "chore: add missing Dependabot configurations"
+
+        git push origin "$BRANCH_NAME" 2>/dev/null || {
+          echo "Failed to push branch"
+          exit 0
+        }
+
+        echo "## Suggested Dependabot Updates" > /tmp/pr-body.md
+        echo "" >> /tmp/pr-body.md
+        echo '```' >> /tmp/pr-body.md
+        echo "$SCAN_OUTPUT" >> /tmp/pr-body.md
+        echo '```' >> /tmp/pr-body.md
+
+        gh pr create \
+          --title "Add missing Dependabot configurations" \
+          --body-file /tmp/pr-body.md \
+          --head "$BRANCH_NAME" \
+          2>/dev/null || echo "PR creation skipped"
