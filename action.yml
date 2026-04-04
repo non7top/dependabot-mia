@@ -1,0 +1,103 @@
+name: 'Dependabot Configuration Scanner'
+description: 'Scan repository for missing Dependabot configurations based on detected project files'
+author: 'non7top'
+
+branding:
+  icon: 'search'
+  color: 'blue'
+
+inputs:
+  ecosystems:
+    description: 'Comma-separated list of ecosystems to check (leave empty for auto-detect)'
+    required: false
+    default: ''
+  fail-on-missing:
+    description: 'Whether to fail the workflow if missing configurations are detected'
+    required: false
+    default: 'true'
+  create-issue:
+    description: 'Create a GitHub issue when missing configurations are detected'
+    required: false
+    default: 'true'
+  labels:
+    description: 'Comma-separated list of labels to add to created issues'
+    required: false
+    default: 'dependabot-scan,security,good-first-issue'
+  token:
+    description: 'GitHub token for creating issues'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  found-ecosystems:
+    description: 'Comma-separated list of detected ecosystems'
+    value: ${{ steps.scan.outputs.found-ecosystems }}
+  missing-ecosystems:
+    description: 'Comma-separated list of missing configurations'
+    value: ${{ steps.scan.outputs.missing-ecosystems }}
+  scan-result:
+    description: 'Scan result: PASS or FAIL'
+    value: ${{ steps.scan.outputs.scan-result }}
+  scan-output:
+    description: 'Full scan output for use in other steps'
+    value: ${{ steps.scan.outputs.scan-output }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run Dependabot Scanner
+      id: scan
+      shell: bash
+      run: |
+        # Get the action directory
+        ACTION_DIR="${{ github.action_path }}"
+
+        # Make scanner executable
+        chmod +x "${ACTION_DIR}/scripts/scan-dependabot.sh"
+
+        # Run scanner
+        SCAN_OUTPUT=$("${ACTION_DIR}/scripts/scan-dependabot.sh" "${{ inputs.ecosystems }}" 2>&1) || true
+
+        # Set outputs
+        echo "scan-output<<EOF" >> $GITHUB_OUTPUT
+        echo "$SCAN_OUTPUT" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+        # Extract found ecosystems
+        FOUND=$(echo "$SCAN_OUTPUT" | grep -E "Found [0-9]+ ecosystem" | sed 's/Found [0-9]* ecosystem(s): //' || echo "")
+        echo "found-ecosystems=$FOUND" >> $GITHUB_OUTPUT
+
+        # Extract missing ecosystems
+        MISSING=$(echo "$SCAN_OUTPUT" | grep "^MISSING:" | sed 's/MISSING: //' || echo "")
+        echo "missing-ecosystems=$MISSING" >> $GITHUB_OUTPUT
+
+        # Determine result
+        if echo "$SCAN_OUTPUT" | grep -q "^MISSING:"; then
+          echo "scan-result=FAIL" >> $GITHUB_OUTPUT
+          if [[ "${{ inputs.fail-on-missing }}" == "true" ]]; then
+            echo "$SCAN_OUTPUT"
+            exit 1
+          fi
+        else
+          echo "scan-result=PASS" >> $GITHUB_OUTPUT
+        fi
+
+        echo "$SCAN_OUTPUT"
+
+    - name: Create issue for missing configurations
+      if: steps.scan.outputs.scan-result == 'FAIL' && inputs.create-issue == 'true' && inputs.token != ''
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        SCAN_OUTPUT: ${{ steps.scan.outputs.scan-output }}
+        ISSUE_LABELS: ${{ inputs.labels }}
+        REPO: ${{ github.repository }}
+      run: |
+        echo "Creating issue for missing configurations..."
+        ISSUE_BODY="## Scan Results${SCAN_OUTPUT}"
+        gh issue create \
+          --repo "$REPO" \
+          --title "Missing Dependabot Configurations" \
+          --body "$ISSUE_BODY" \
+          --label "$ISSUE_LABELS" \
+          2>/dev/null || echo "Issue creation skipped"

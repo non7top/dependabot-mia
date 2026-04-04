@@ -14,9 +14,6 @@ NC='\033[0m' # No Color
 # Repository root (default: current directory)
 REPO_ROOT="${1:-.}"
 
-# Track if we found any issues
-FOUND_ISSUES=0
-
 # Supported ecosystems and their indicator files
 declare -A ECOSYSTEM_INDICATORS=(
   ["npm"]="package.json"
@@ -111,7 +108,6 @@ for ecosystem in "${!ECOSYSTEM_INDICATORS[@]}"; do
     else
       echo -e "${RED}✗${NC} $ecosystem - MISSING Dependabot configuration"
       MISSING_ECOSYSTEMS+=("$ecosystem")
-      FOUND_ISSUES=1
     fi
   fi
 done
