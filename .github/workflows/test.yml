@@ -1,0 +1,24 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  test-scanner:
+    name: Test Scanner Script
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run unit tests
+        run: |
+          chmod +x tests/run-tests.sh
+          ./tests/run-tests.sh
