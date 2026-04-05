@@ -14,44 +14,88 @@ NC='\033[0m' # No Color
 # Repository root (default: current directory)
 REPO_ROOT="${1:-.}"
 
-# Track if we found any issues
-FOUND_ISSUES=0
+# Remove trailing slash if present
+REPO_ROOT="${REPO_ROOT%/}"
 
 # Supported ecosystems and their indicator files
 declare -A ECOSYSTEM_INDICATORS=(
   ["npm"]="package.json"
-  ["yarn"]="package.json"
-  ["pip"]="requirements.txt|setup.py|setup.cfg|pyproject.toml|Pipfile"
-  ["bundler"]="Gemfile"
-  ["cargo"]="Cargo.toml"
+  ["bun"]="bun.lockb|bun.lock"
+  ["pip"]="requirements.txt|setup.py|setup.cfg|pyproject.toml|Pipfile|Pipfile.lock"
+  ["bundler"]="Gemfile|Gemfile.lock"
+  ["cargo"]="Cargo.toml|Cargo.lock"
   ["nuget"]="*.csproj|*.fsproj|*.vbproj|packages.config"
-  ["composer"]="composer.json"
-  ["go-modules"]="go.mod"
-  ["gradle"]="build.gradle|build.gradle.kts|settings.gradle|settings.gradle.kts"
+  ["composer"]="composer.json|composer.lock"
+  ["gomod"]="go.mod|go.sum"
+  ["gradle"]="build.gradle|build.gradle.kts|settings.gradle|settings.gradle.kts|gradle.properties"
   ["maven"]="pom.xml"
-  ["docker"]="Dockerfile|docker-compose.yml|docker-compose.yaml"
+  ["docker"]="Dockerfile"
+  ["docker-compose"]="docker-compose.yml|docker-compose.yaml|compose.yml|compose.yaml"
   ["github-actions"]=".github/workflows/*.yml|.github/workflows/*.yaml"
   ["terraform"]="*.tf"
-  ["bun"]="package.json|bun.lockb"
-  ["devcontainers"]="devcontainer.json|.devcontainer/devcontainer.json"
-  ["pub"]="pubspec.yaml"
-  ["elm"]="elm.json"
-  ["hex"]="mix.exs"
+  ["opentofu"]="*.tofu"
+  ["bazel"]="BUILD|WORKSPACE|BUILD.bazel|WORKSPACE.bazel"
+  ["conda"]="environment.yml|environment.yaml|conda.yaml"
+  ["pub"]="pubspec.yaml|pubspec.lock"
   ["swift"]="Package.swift"
-  ["submodules"]=".gitmodules"
+  ["gitsubmodule"]=".gitmodules"
+  ["devcontainers"]="devcontainer.json|.devcontainer/devcontainer.json|.devcontainer.json"
+  ["elm"]="elm.json"
+  ["mix"]="mix.exs"
+  ["helm"]="Chart.yaml|Chart.yml"
+  ["julia"]="Project.toml|JuliaProject.toml"
+  ["pre-commit"]=".pre-commit-config.yaml"
+  ["uv"]="uv.lock"
+  ["dotnet-sdk"]="*.csproj|*.fsproj|*.vbproj|global.json"
+  ["rust-toolchain"]="rust-toolchain|rust-toolchain.toml"
+  ["vcpkg"]="vcpkg.json|vcpkg-configuration.json"
 )
 
-# Function to check if indicator files exist
-check_ecosystem() {
+# Map ecosystem names to dependabot package-ecosystem values
+declare -A ECOSYSTEM_MAP=(
+  ["npm"]="npm"
+  ["bun"]="bun"
+  ["pip"]="pip"
+  ["bundler"]="bundler"
+  ["cargo"]="cargo"
+  ["nuget"]="nuget"
+  ["composer"]="composer"
+  ["gomod"]="gomod"
+  ["gradle"]="gradle"
+  ["maven"]="maven"
+  ["docker"]="docker"
+  ["docker-compose"]="docker-compose"
+  ["github-actions"]="github-actions"
+  ["terraform"]="terraform"
+  ["opentofu"]="opentofu"
+  ["bazel"]="bazel"
+  ["conda"]="conda"
+  ["pub"]="pub"
+  ["swift"]="swift"
+  ["gitsubmodule"]="gitsubmodule"
+  ["devcontainers"]="devcontainers"
+  ["elm"]="elm"
+  ["mix"]="mix"
+  ["helm"]="helm"
+  ["julia"]="julia"
+  ["pre-commit"]="pre-commit"
+  ["uv"]="uv"
+  ["dotnet-sdk"]="dotnet-sdk"
+  ["rust-toolchain"]="rust-toolchain"
+  ["vcpkg"]="vcpkg"
+)
+
+# Function to check if indicator files exist in a directory
+check_ecosystem_in_dir() {
   local ecosystem="$1"
   local indicators="$2"
+  local search_dir="$3"
   local IFS='|'
 
   read -ra PATTERNS <<< "$indicators"
 
   for pattern in "${PATTERNS[@]}"; do
-    # Search recursively in repo root
-    if find "$REPO_ROOT" -name "$pattern" -type f 2>/dev/null | grep -q .; then
+    if find "$search_dir" -maxdepth 1 -name "$pattern" -type f 2>/dev/null | grep -q .; then
       return 0
     fi
   done
@@ -59,21 +103,95 @@ check_ecosystem() {
   return 1
 }
 
-# Function to check if ecosystem is in dependabot.yml
-is_configured() {
+# Function to check if ecosystem is configured in dependabot.yml for a specific directory
+is_configured_for_dir() {
   local ecosystem="$1"
+  local dir="$2"
   local dependabot_file="$REPO_ROOT/.github/dependabot.yml"
 
   if [[ ! -f "$dependabot_file" ]]; then
     return 1
   fi
 
-  # Check if ecosystem is mentioned in dependabot.yml
-  if grep -qi "package-ecosystem.*$ecosystem" "$dependabot_file"; then
+  local pkg_ecosystem="${ECOSYSTEM_MAP[$ecosystem]:-$ecosystem}"
+  if grep -qi "package-ecosystem.*['\"]?${pkg_ecosystem}['\"]?" "$dependabot_file" && \
+     grep -qi "directory.*['\"]?${dir}['\"]?" "$dependabot_file"; then
     return 0
   fi
 
   return 1
+}
+
+# Function to get dependabot config snippet for ecosystem
+get_config_snippet() {
+  local ecosystem="$1"
+  local dir="$2"
+  local pkg_ecosystem="${ECOSYSTEM_MAP[$ecosystem]:-$ecosystem}"
+
+  case "$ecosystem" in
+    "npm"|"bun")
+      cat << EOF
+  - package-ecosystem: "${pkg_ecosystem}"
+    directory: "${dir}"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+EOF
+      ;;
+    "pip"|"conda"|"uv")
+      cat << EOF
+  - package-ecosystem: "${pkg_ecosystem}"
+    directory: "${dir}"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+EOF
+      ;;
+    "gomod")
+      cat << EOF
+  - package-ecosystem: "gomod"
+    directory: "${dir}"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+EOF
+      ;;
+    "docker"|"docker-compose")
+      cat << EOF
+  - package-ecosystem: "${pkg_ecosystem}"
+    directory: "${dir}"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+EOF
+      ;;
+    "github-actions")
+      cat << EOF
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+EOF
+      ;;
+    "terraform"|"opentofu")
+      cat << EOF
+  - package-ecosystem: "${pkg_ecosystem}"
+    directory: "${dir}"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+EOF
+      ;;
+    *)
+      cat << EOF
+  - package-ecosystem: "${pkg_ecosystem}"
+    directory: "${dir}"
+    schedule:
+      interval: "weekly"
+EOF
+      ;;
+  esac
 }
 
 echo "=============================================="
@@ -86,10 +204,10 @@ echo ""
 
 # Check if dependabot.yml exists
 if [[ -f "$REPO_ROOT/.github/dependabot.yml" ]]; then
-  echo -e "${GREEN}✓${NC} Found .github/dependabot.yml"
+  echo -e "${GREEN}Found${NC} .github/dependabot.yml"
   echo ""
 else
-  echo -e "${YELLOW}⚠${NC} No .github/dependabot.yml found"
+  echo -e "${YELLOW}Missing${NC} .github/dependabot.yml"
   echo ""
 fi
 
@@ -98,22 +216,72 @@ echo "  Scanning for Project Files"
 echo "----------------------------------------------"
 echo ""
 
-# Track found ecosystems
-declare -a FOUND_ECOSYSTEMS=()
-declare -a MISSING_ECOSYSTEMS=()
+# Track results
+declare -a FOUND_RESULTS=()
+declare -a MISSING_RESULTS=()
+TOTAL_ECOSYSTEMS=0
+MISSING_COUNT=0
 
+# First check root directory
 for ecosystem in "${!ECOSYSTEM_INDICATORS[@]}"; do
-  if check_ecosystem "$ecosystem" "${ECOSYSTEM_INDICATORS[$ecosystem]}"; then
-    FOUND_ECOSYSTEMS+=("$ecosystem")
+  if check_ecosystem_in_dir "$ecosystem" "${ECOSYSTEM_INDICATORS[$ecosystem]}" "$REPO_ROOT"; then
+    TOTAL_ECOSYSTEMS=$((TOTAL_ECOSYSTEMS + 1))
+    local_dir="/"
 
-    if is_configured "$ecosystem"; then
-      echo -e "${GREEN}✓${NC} $ecosystem - Configured in dependabot.yml"
+    if is_configured_for_dir "$ecosystem" "$local_dir"; then
+      FOUND_RESULTS+=("  ${GREEN}Configured${NC}: $ecosystem (directory: $local_dir)")
     else
-      echo -e "${RED}✗${NC} $ecosystem - MISSING Dependabot configuration"
-      MISSING_ECOSYSTEMS+=("$ecosystem")
-      FOUND_ISSUES=1
+      MISSING_RESULTS+=("  ${RED}Missing${NC}: $ecosystem (directory: $local_dir)")
+      MISSING_COUNT=$((MISSING_COUNT + 1))
     fi
   fi
+done
+
+# Then scan subdirectories (depth 1)
+for dir in "$REPO_ROOT"/*/; do
+  [[ -d "$dir" ]] || continue
+  dir_name=$(basename "$dir")
+  [[ "$dir_name" == .* ]] && continue
+  [[ "$dir_name" == "node_modules" ]] && continue
+  [[ "$dir_name" == ".git" ]] && continue
+  [[ "$dir_name" == "vendor" ]] && continue
+  [[ "$dir_name" == "target" ]] && continue
+
+  rel_path="${dir#"$REPO_ROOT"}"
+
+  for ecosystem in "${!ECOSYSTEM_INDICATORS[@]}"; do
+    if check_ecosystem_in_dir "$ecosystem" "${ECOSYSTEM_INDICATORS[$ecosystem]}" "$dir"; then
+      TOTAL_ECOSYSTEMS=$((TOTAL_ECOSYSTEMS + 1))
+
+      if is_configured_for_dir "$ecosystem" "$rel_path"; then
+        FOUND_RESULTS+=("  ${GREEN}Configured${NC}: $ecosystem (directory: $rel_path)")
+      else
+        MISSING_RESULTS+=("  ${RED}Missing${NC}: $ecosystem (directory: $rel_path)")
+        MISSING_COUNT=$((MISSING_COUNT + 1))
+      fi
+    fi
+  done
+done
+
+# Print results
+if [[ $TOTAL_ECOSYSTEMS -eq 0 ]]; then
+  echo -e "${BLUE}No supported project ecosystems detected${NC}"
+  echo ""
+  echo "----------------------------------------------"
+  echo "  Scan Summary"
+  echo "----------------------------------------------"
+  echo ""
+  echo "Total ecosystems found: 0"
+  echo "Result: PASS"
+  exit 0
+fi
+
+for result in "${FOUND_RESULTS[@]}"; do
+  echo -e "$result"
+done
+
+for result in "${MISSING_RESULTS[@]}"; do
+  echo -e "$result"
 done
 
 echo ""
@@ -121,79 +289,28 @@ echo "----------------------------------------------"
 echo "  Scan Summary"
 echo "----------------------------------------------"
 echo ""
+echo "Total ecosystems found: $TOTAL_ECOSYSTEMS"
+echo "Configured: $((TOTAL_ECOSYSTEMS - MISSING_COUNT))"
+echo "Missing: $MISSING_COUNT"
 
-if [[ ${#FOUND_ECOSYSTEMS[@]} -eq 0 ]]; then
-  echo -e "${BLUE}ℹ${NC} No supported project ecosystems detected"
-  exit 0
-fi
-
-echo "Found ${#FOUND_ECOSYSTEMS[@]} ecosystem(s): ${FOUND_ECOSYSTEMS[*]}"
-echo ""
-
-if [[ ${#MISSING_ECOSYSTEMS[@]} -gt 0 ]]; then
-  echo -e "${RED}MISSING configurations for: ${MISSING_ECOSYSTEMS[*]}${NC}"
+if [[ $MISSING_COUNT -gt 0 ]]; then
+  echo ""
+  echo -e "${RED}Result: FAIL${NC}"
   echo ""
   echo "Recommended dependabot.yml additions:"
-  for ecosystem in "${MISSING_ECOSYSTEMS[@]}"; do
-    echo ""
-    case "$ecosystem" in
-      "npm"|"yarn"|"bun")
-        cat << EOF
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
-EOF
-        ;;
-      "pip")
-        cat << EOF
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
-EOF
-        ;;
-      "go-modules")
-        cat << EOF
-  - package-ecosystem: "gomod"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
-EOF
-        ;;
-      "docker")
-        cat << EOF
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-EOF
-        ;;
-      "github-actions")
-        cat << EOF
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-EOF
-        ;;
-      *)
-        echo "  - package-ecosystem: \"$ecosystem\""
-        echo "    directory: \"/\""
-        echo "    schedule:"
-        echo "      interval: \"weekly\""
-        ;;
-    esac
-  done
   echo ""
-  echo "MISSING: ${MISSING_ECOSYSTEMS[*]}"
+
+  for result in "${MISSING_RESULTS[@]}"; do
+    eco=$(echo "$result" | grep -oP 'Missing.: \K[^ ]+')
+    dir=$(echo "$result" | grep -oP 'directory: \K[^)]+')
+
+    get_config_snippet "$eco" "$dir"
+    echo ""
+  done
   exit 1
 else
-  echo -e "${GREEN}✓${NC} All detected ecosystems are configured in dependabot.yml"
+  echo ""
+  echo -e "${GREEN}Result: PASS${NC}"
+  echo "All detected ecosystems are configured in dependabot.yml"
   exit 0
 fi

@@ -1,0 +1,96 @@
+name: 'Update Ecosystems from Docs'
+description: 'Fetch official GitHub docs and update scanner with new ecosystems'
+author: 'non7top'
+
+inputs:
+  create-pr:
+    description: 'Create a PR with the updates'
+    required: false
+    default: 'true'
+  create-issue:
+    description: 'Create an issue if updates found (alternative to PR)'
+    required: false
+    default: 'false'
+  branch-name:
+    description: 'Branch name for PR'
+    required: false
+    default: 'dependabot-mia/update-ecosystems-${{ github.run_id }}'
+  token:
+    description: 'GitHub token'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  result:
+    description: 'NO_UPDATES, UPDATES_FOUND, or ERROR'
+    value: ${{ steps.update.outputs.result }}
+  new-ecosystems:
+    description: 'Comma-separated list of new ecosystems'
+    value: ${{ steps.update.outputs.new-ecosystems }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Update Ecosystems from Official Docs
+      id: update
+      shell: bash
+      env:
+        TEMP_DIR: ${{ runner.temp }}
+      run: |
+        mkdir -p "$TEMP_DIR"
+        curl -sL "https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference" > "$TEMP_DIR/docs.html"
+
+        chmod +x "${{ github.action_path }}/scripts/update-ecosystems.sh"
+        ${{ github.action_path }}/scripts/update-ecosystems.sh
+
+    - name: Create PR with Updates
+      if: steps.update.outputs.result == 'UPDATES_FOUND' && inputs.create-pr == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        BRANCH_NAME: ${{ inputs.branch-name }}
+        NEW_ECOSYSTEMS: ${{ steps.update.outputs.new-ecosystems }}
+      run: |
+        git checkout -b "$BRANCH_NAME" 2>/dev/null || {
+          echo "Branch exists, skipping"
+          exit 0
+        }
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        git add scripts/scan-dependabot.sh
+        git commit -m "chore: add new ecosystems from official docs"
+
+        git push origin "$BRANCH_NAME" 2>/dev/null || exit 0
+
+        echo "## New Ecosystems" > /tmp/pr-body.md
+        echo "" >> /tmp/pr-body.md
+        echo '```' >> /tmp/pr-body.md
+        echo "$NEW_ECOSYSTEMS" >> /tmp/pr-body.md
+        echo '```' >> /tmp/pr-body.md
+
+        gh pr create \
+          --title "Update scanner with new ecosystems" \
+          --body-file /tmp/pr-body.md \
+          --head "$BRANCH_NAME" \
+          2>/dev/null || echo "PR creation skipped"
+
+    - name: Create Issue for Manual Review
+      if: steps.update.outputs.result == 'UPDATES_FOUND' && inputs.create-issue == 'true' && inputs.create-pr != 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        NEW_ECOSYSTEMS: ${{ steps.update.outputs.new-ecosystems }}
+      run: |
+        echo "## New Ecosystems Detected" > /tmp/issue-body.md
+        echo "" >> /tmp/issue-body.md
+        echo '```' >> /tmp/issue-body.md
+        echo "$NEW_ECOSYSTEMS" >> /tmp/issue-body.md
+        echo '```' >> /tmp/issue-body.md
+
+        gh issue create \
+          --title "New ecosystems available from official docs" \
+          --body-file /tmp/issue-body.md \
+          --label "enhancement,dependabot-scan" \
+          2>/dev/null || echo "Issue creation skipped"

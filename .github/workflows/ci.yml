@@ -2,16 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 permissions:
   contents: read
 
 jobs:
-  validate-scripts:
-    name: Validate Scanner Scripts
+  validate-action:
+    name: Validate Action
     runs-on: ubuntu-latest
 
     steps:
@@ -30,3 +30,19 @@ jobs:
         uses: ludeeus/action-shellcheck@master
         with:
           scandir: './scripts'
+          severity: error
+
+  test-action:
+    name: Test Action (Self-Hosted)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run scanner on this repo
+        uses: ./
+        with:
+          fail-on-missing: 'false'
+          create-issue: 'false'
+          create-pr: 'false'

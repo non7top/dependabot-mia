@@ -1,0 +1,44 @@
+name: Update Ecosystems from Docs
+
+on:
+  schedule:
+    - cron: '0 8 1 * *'
+  workflow_dispatch:
+    inputs:
+      create-pr:
+        description: 'Create PR with updates'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      create-issue:
+        description: 'Create issue instead of PR'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  update-ecosystems:
+    name: Check for New Ecosystems
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run ecosystem updater
+        id: update
+        uses: ./update-ecosystems
+        with:
+          create-pr: ${{ github.event.inputs.create-pr || 'true' }}
+          create-issue: ${{ github.event.inputs.create-issue || 'false' }}
