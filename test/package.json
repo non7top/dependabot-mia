@@ -1,0 +1,84 @@
+{
+  "name": "sample-project",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sample web application with backend and frontend",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "tsx watch src/backend/index.ts",
+    "dev:frontend": "vite",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "vite build",
+    "build:backend": "tsc -p tsconfig.backend.json",
+    "start": "node dist/backend/index.js",
+    "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "playwright test",
+    "prepare": "husky",
+    "docker:build": "docker build -t sample-project .",
+    "docker:build:nginx": "docker build -f Dockerfile.nginx -t sample-project:nginx .",
+    "docker:build:dev": "docker compose -f docker-compose.yml build",
+    "docker:up": "docker compose up",
+    "docker:up:dev": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "docker:prod": "docker compose -f docker-compose.prod.yml up -d",
+    "docker:prod:nginx": "docker compose -f docker-compose.prod.nginx.yml up -d",
+    "docker:stop": "docker compose -f docker-compose.prod.yml down",
+    "docker:logs": "docker compose logs -f",
+    "docker:clean": "docker compose down --rmi local -v"
+  },
+  "dependencies": {
+    "@sample-lib/utils": "^1.0.0",
+    "@sample-lib/components": "^2.0.0",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^25.5.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/supertest": "^7.2.0",
+    "@types/three": "^0.183.1",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.2",
+    "concurrently": "^9.1.0",
+    "eslint": "^10.2.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.0",
+    "husky": "^9.1.0",
+    "jsdom": "^29.0.1",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.4.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "supertest": "^7.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.0",
+    "vite": "^8.0.3",
+    "vitest": "^4.1.2"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

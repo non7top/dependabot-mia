@@ -1,0 +1,43 @@
+# Development Docker Compose
+# Usage: docker compose up
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: backend
+    container_name: sample-project-backend-dev
+    ports:
+      - '3001:3001'
+    volumes:
+      - .:/app:cached
+      - /app/node_modules
+      - /app/dist
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+    command: npm run dev:backend
+    healthcheck:
+      test: ['CMD', 'node', '-e', "require('http').get('http://localhost:3001/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: frontend
+    container_name: sample-project-frontend-dev
+    ports:
+      - '3000:3000'
+    volumes:
+      - .:/app:cached
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3001
+    command: npm run dev:frontend
+    depends_on:
+      backend:
+        condition: service_healthy

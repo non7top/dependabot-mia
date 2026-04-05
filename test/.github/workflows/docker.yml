@@ -1,0 +1,163 @@
+name: Docker
+
+on:
+  push:
+    branches: [master, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [master, develop]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    name: Build & Test Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: sample-project:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run health check in container
+        run: |
+          docker run -d --name test-container -p 3001:3001 sample-project:test
+          sleep 15
+          HEALTH=$(curl -sf http://localhost:3001/api/health) || { docker logs test-container; exit 1; }
+          echo "Health: $HEALTH"
+          docker stop test-container
+          docker rm test-container
+
+      - name: Get image size
+        id: image-size
+        run: |
+          SIZE=$(docker image inspect sample-project:test --format='{{.Size}}' | awk '{printf "%.0f", $1/1024/1024}')
+          echo "size_mb=${SIZE}" >> $GITHUB_OUTPUT
+          echo "Image size: ${SIZE}MB"
+
+      - name: Comment image size on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const size = '${{ steps.image-size.outputs.size_mb }}';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Docker Build Successful\n\n- **Image size**: ${size}MB\n- **Status**: All checks passed`
+            })
+
+      - name: Push Docker image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  security-scan:
+    name: Security Scan (Trivy)
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: sample-project:scan
+          cache-from: type=gha
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: sample-project:scan
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+
+  build-nginx:
+    name: Build Nginx Variant
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Nginx Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.nginx
+          push: false
+          load: true
+          tags: sample-project:nginx-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify build
+        run: |
+          docker run --rm sample-project:nginx-test nginx -t 2>&1 | grep "syntax is ok" || exit 1
