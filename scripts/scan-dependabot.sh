@@ -114,8 +114,8 @@ is_configured_for_dir() {
   fi
 
   local pkg_ecosystem="${ECOSYSTEM_MAP[$ecosystem]:-$ecosystem}"
-  if grep -qi "package-ecosystem.*['\"]?${pkg_ecosystem}['\"]?" "$dependabot_file" && \
-     grep -qi "directory.*['\"]?${dir}['\"]?" "$dependabot_file"; then
+  if grep -qiE "package-ecosystem:.*['\"]?${pkg_ecosystem}['\"]?" "$dependabot_file" && \
+     grep -qiE "directory:.*['\"]?${dir}['\"]?" "$dependabot_file"; then
     return 0
   fi
 
