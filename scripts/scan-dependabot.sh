@@ -95,8 +95,16 @@ check_ecosystem_in_dir() {
   read -ra PATTERNS <<< "$indicators"
 
   for pattern in "${PATTERNS[@]}"; do
-    if find "$search_dir" -maxdepth 1 -name "$pattern" -type f 2>/dev/null | grep -q .; then
-      return 0
+    if [[ "$pattern" == */* ]]; then
+      # Pattern contains path separator, use -wholename
+      if find "$search_dir" -maxdepth 3 -wholename "*/$pattern" -type f 2>/dev/null | grep -q .; then
+        return 0
+      fi
+    else
+      # Simple filename pattern, use -name
+      if find "$search_dir" -maxdepth 1 -name "$pattern" -type f 2>/dev/null | grep -q .; then
+        return 0
+      fi
     fi
   done
 

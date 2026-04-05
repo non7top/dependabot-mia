@@ -139,6 +139,12 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# Test 10: Detects github-actions ecosystem
+mkdir -p "$FIXTURES/gh-actions/.github/workflows"
+echo "name: test" > "$FIXTURES/gh-actions/.github/workflows/test.yml"
+assert_detects_ecosystem "Detects github-actions" "$FIXTURES/gh-actions" "github-actions"
+rm -rf "$FIXTURES/gh-actions"
+
 echo ""
 echo "=============================================="
 echo "  Test Results: $PASS passed, $FAIL failed"
