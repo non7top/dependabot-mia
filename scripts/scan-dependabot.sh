@@ -245,32 +245,6 @@ for ecosystem in "${!ECOSYSTEM_INDICATORS[@]}"; do
   fi
 done
 
-# Then scan subdirectories (depth 1)
-for dir in "$REPO_ROOT"/*/; do
-  [[ -d "$dir" ]] || continue
-  dir_name=$(basename "$dir")
-  [[ "$dir_name" == .* ]] && continue
-  [[ "$dir_name" == "node_modules" ]] && continue
-  [[ "$dir_name" == ".git" ]] && continue
-  [[ "$dir_name" == "vendor" ]] && continue
-  [[ "$dir_name" == "target" ]] && continue
-
-  rel_path="${dir#"$REPO_ROOT"}"
-
-  for ecosystem in "${!ECOSYSTEM_INDICATORS[@]}"; do
-    if check_ecosystem_in_dir "$ecosystem" "${ECOSYSTEM_INDICATORS[$ecosystem]}" "$dir"; then
-      TOTAL_ECOSYSTEMS=$((TOTAL_ECOSYSTEMS + 1))
-
-      if is_configured_for_dir "$ecosystem" "$rel_path"; then
-        FOUND_RESULTS+=("  ${GREEN}Configured${NC}: $ecosystem (directory: $rel_path)")
-      else
-        MISSING_RESULTS+=("  ${RED}Missing${NC}: $ecosystem (directory: $rel_path)")
-        MISSING_COUNT=$((MISSING_COUNT + 1))
-      fi
-    fi
-  done
-done
-
 # Print results
 if [[ $TOTAL_ECOSYSTEMS -eq 0 ]]; then
   echo -e "${BLUE}No supported project ecosystems detected${NC}"
