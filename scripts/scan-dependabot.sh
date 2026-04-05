@@ -85,6 +85,20 @@ declare -A ECOSYSTEM_MAP=(
   ["vcpkg"]="vcpkg"
 )
 
+# Ecosystems that only make sense at root level
+ROOT_ONLY_ECOSYSTEMS="github-actions devcontainers gitsubmodule"
+
+# Function to check if ecosystem is root-only
+is_root_only() {
+  local ecosystem="$1"
+  for root_eco in $ROOT_ONLY_ECOSYSTEMS; do
+    if [[ "$ecosystem" == "$root_eco" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 # Function to check if indicator files exist in a directory
 check_ecosystem_in_dir() {
   local ecosystem="$1"
@@ -258,6 +272,11 @@ for dir in "$REPO_ROOT"/*/; do
   rel_path="${dir#"$REPO_ROOT"}"
 
   for ecosystem in "${!ECOSYSTEM_INDICATORS[@]}"; do
+    # Skip root-only ecosystems when scanning subdirectories
+    if is_root_only "$ecosystem"; then
+      continue
+    fi
+
     if check_ecosystem_in_dir "$ecosystem" "${ECOSYSTEM_INDICATORS[$ecosystem]}" "$dir"; then
       TOTAL_ECOSYSTEMS=$((TOTAL_ECOSYSTEMS + 1))
 
