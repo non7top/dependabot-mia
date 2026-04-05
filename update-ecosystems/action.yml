@@ -34,14 +34,9 @@ runs:
     - name: Update Ecosystems from Official Docs
       id: update
       shell: bash
-      env:
-        TEMP_DIR: ${{ runner.temp }}
       run: |
-        mkdir -p "$TEMP_DIR"
-        curl -sL "https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference" > "$TEMP_DIR/docs.html"
-
-        chmod +x "${{ github.action_path }}/scripts/update-ecosystems.sh"
-        ${{ github.action_path }}/scripts/update-ecosystems.sh
+        chmod +x "${{ github.workspace }}/scripts/update-ecosystems.sh"
+        ${{ github.workspace }}/scripts/update-ecosystems.sh
 
     - name: Create PR with Updates
       if: steps.update.outputs.result == 'UPDATES_FOUND' && inputs.create-pr == 'true'
