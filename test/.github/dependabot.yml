@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # 1. GitHub Actions: Updates versions of actions used in your .github/workflows/
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+
+  # 2. Node.js: Updates npm dependencies in package.json
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'daily'
+
+  # 3. Docker: Updates base images in your Dockerfiles (e.g., FROM node:20)
+  - package-ecosystem: 'docker'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+
+  # 4. Docker Compose: Updates image versions defined in docker-compose.yml
+  - package-ecosystem: 'docker-compose'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
