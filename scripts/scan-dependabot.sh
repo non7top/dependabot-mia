@@ -85,20 +85,6 @@ declare -A ECOSYSTEM_MAP=(
   ["vcpkg"]="vcpkg"
 )
 
-# Ecosystems that only make sense at root level
-ROOT_ONLY_ECOSYSTEMS="github-actions devcontainers gitsubmodule"
-
-# Function to check if ecosystem is root-only
-is_root_only() {
-  local ecosystem="$1"
-  for root_eco in $ROOT_ONLY_ECOSYSTEMS; do
-    if [[ "$ecosystem" == "$root_eco" ]]; then
-      return 0
-    fi
-  done
-  return 1
-}
-
 # Function to check if indicator files exist in a directory
 check_ecosystem_in_dir() {
   local ecosystem="$1"
@@ -257,37 +243,6 @@ for ecosystem in "${!ECOSYSTEM_INDICATORS[@]}"; do
       MISSING_COUNT=$((MISSING_COUNT + 1))
     fi
   fi
-done
-
-# Then scan subdirectories (depth 1)
-for dir in "$REPO_ROOT"/*/; do
-  [[ -d "$dir" ]] || continue
-  dir_name=$(basename "$dir")
-  [[ "$dir_name" == .* ]] && continue
-  [[ "$dir_name" == "node_modules" ]] && continue
-  [[ "$dir_name" == ".git" ]] && continue
-  [[ "$dir_name" == "vendor" ]] && continue
-  [[ "$dir_name" == "target" ]] && continue
-
-  rel_path="${dir#"$REPO_ROOT"}"
-
-  for ecosystem in "${!ECOSYSTEM_INDICATORS[@]}"; do
-    # Skip root-only ecosystems when scanning subdirectories
-    if is_root_only "$ecosystem"; then
-      continue
-    fi
-
-    if check_ecosystem_in_dir "$ecosystem" "${ECOSYSTEM_INDICATORS[$ecosystem]}" "$dir"; then
-      TOTAL_ECOSYSTEMS=$((TOTAL_ECOSYSTEMS + 1))
-
-      if is_configured_for_dir "$ecosystem" "$rel_path"; then
-        FOUND_RESULTS+=("  ${GREEN}Configured${NC}: $ecosystem (directory: $rel_path)")
-      else
-        MISSING_RESULTS+=("  ${RED}Missing${NC}: $ecosystem (directory: $rel_path)")
-        MISSING_COUNT=$((MISSING_COUNT + 1))
-      fi
-    fi
-  done
 done
 
 # Print results

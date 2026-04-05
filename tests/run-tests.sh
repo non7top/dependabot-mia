@@ -112,9 +112,9 @@ assert_detects_ecosystem "Detects npm in npm-configured" "$FIXTURES/npm-configur
 # Test 5: Scanner detects missing npm in missing-config
 assert_contains "Reports missing npm" "$FIXTURES/missing-config" "Missing"
 
-# Test 6: Multi-ecosystem detection
-assert_detects_ecosystem "Detects docker in multi-dir" "$FIXTURES/multi-dir" "docker"
-assert_detects_ecosystem "Detects npm in multi-dir" "$FIXTURES/multi-dir" "npm"
+# Test 6: Multi-ecosystem detection at root
+assert_detects_ecosystem "Detects docker at root" "$FIXTURES/multi-dir" "docker"
+assert_detects_ecosystem "Detects npm at root" "$FIXTURES/multi-dir" "npm"
 
 # Test 7: Test directory (the actual test fixture)
 assert_pass "Test directory passes (all configured)" "$SCRIPT_DIR/../test/"
