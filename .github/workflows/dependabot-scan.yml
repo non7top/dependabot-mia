@@ -64,7 +64,7 @@ jobs:
           labels: 'dependabot-scan,security,good-first-issue'
 
       - name: Upload scan results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: dependabot-scan-results
