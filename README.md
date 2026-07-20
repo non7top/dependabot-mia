@@ -9,7 +9,7 @@ A **reusable GitHub Action** that automatically scans repositories for missing D
 ## Features
 
 - **30+ supported ecosystems** - From npm to vcpkg
-- **Directory-level detection** - Scans subdirectories, not just root
+- **Root-level detection** - Scans the repository root for project files
 - **Auto issue/PR creation** - Creates issues or PRs with suggested changes
 - **Configurable behavior** - Control failure, issue creation, and PR generation
 - **Action outputs** - Expose scan results for downstream workflow steps
@@ -140,7 +140,7 @@ Found .github/dependabot.yml
 
   Configured: github-actions (directory: /)
   Missing: docker (directory: /)
-  Missing: npm (directory: /client)
+  Missing: npm (directory: /)
 
 ----------------------------------------------
   Scan Summary

@@ -145,6 +145,26 @@ echo "name: test" > "$FIXTURES/gh-actions/.github/workflows/test.yml"
 assert_detects_ecosystem "Detects github-actions" "$FIXTURES/gh-actions" "github-actions"
 rm -rf "$FIXTURES/gh-actions"
 
+# Test 11: ecosystems filter restricts scan to the requested ecosystem
+output=$("$SCANNER" "$FIXTURES/multi-dir" "docker" 2>&1) || true
+if echo "$output" | grep -q "Total ecosystems found: 1" && ! echo "$output" | grep -q "npm"; then
+  echo -e "${GREEN}PASS${NC}: ecosystems filter restricts scan to docker only"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}FAIL${NC}: ecosystems filter did not restrict scan correctly"
+  FAIL=$((FAIL + 1))
+fi
+
+# Test 12: ecosystems filter warns on and ignores unknown ecosystem names
+output=$("$SCANNER" "$FIXTURES/multi-dir" "docker,made-up-eco" 2>&1) || true
+if echo "$output" | grep -q "unknown ecosystem 'made-up-eco'" && echo "$output" | grep -q "Total ecosystems found: 1"; then
+  echo -e "${GREEN}PASS${NC}: ecosystems filter warns on unknown ecosystem"
+  PASS=$((PASS + 1))
+else
+  echo -e "${RED}FAIL${NC}: ecosystems filter did not warn on unknown ecosystem"
+  FAIL=$((FAIL + 1))
+fi
+
 echo ""
 echo "=============================================="
 echo "  Test Results: $PASS passed, $FAIL failed"

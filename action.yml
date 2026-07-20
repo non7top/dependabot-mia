@@ -38,10 +38,10 @@ inputs:
 
 outputs:
   found-ecosystems:
-    description: 'Comma-separated list of detected ecosystems'
+    description: 'Count of detected ecosystems'
     value: ${{ steps.scan.outputs.found-ecosystems }}
   missing-ecosystems:
-    description: 'Comma-separated list of missing configurations'
+    description: 'Count of missing configurations'
     value: ${{ steps.scan.outputs.missing-ecosystems }}
   scan-result:
     description: 'Scan result: PASS or FAIL'
@@ -60,7 +60,9 @@ runs:
         ACTION_DIR="${{ github.action_path }}"
         chmod +x "${ACTION_DIR}/scripts/scan-dependabot.sh"
 
-        SCAN_OUTPUT=$("${ACTION_DIR}/scripts/scan-dependabot.sh" "." 2>&1) || true
+        SCAN_OUTPUT=$("${ACTION_DIR}/scripts/scan-dependabot.sh" "." "${{ inputs.ecosystems }}" 2>&1) || true
+
+        echo "$SCAN_OUTPUT" > scan-results.txt
 
         echo "scan-output<<SCANEOF" >> $GITHUB_OUTPUT
         echo "$SCAN_OUTPUT" >> $GITHUB_OUTPUT
@@ -124,7 +126,7 @@ runs:
           echo "updates:" >> .github/dependabot.yml
         fi
 
-        SCAN_RESULTS=$(echo "$SCAN_OUTPUT" | sed -n '/Recommended dependabot.yml additions:/,/^$/p' | tail -n +2)
+        SCAN_RESULTS=$(echo "$SCAN_OUTPUT" | sed -n '/Recommended dependabot.yml additions:/,$p' | tail -n +2)
         if [[ -n "$SCAN_RESULTS" ]]; then
           echo "$SCAN_RESULTS" >> .github/dependabot.yml
         fi
