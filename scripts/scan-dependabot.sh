@@ -17,6 +17,10 @@ REPO_ROOT="${1:-.}"
 # Remove trailing slash if present
 REPO_ROOT="${REPO_ROOT%/}"
 
+# Optional comma-separated list of ecosystems to restrict the scan to
+# (leave empty to auto-detect across all supported ecosystems)
+ECOSYSTEMS_FILTER="${2:-}"
+
 # Supported ecosystems and their indicator files
 declare -A ECOSYSTEM_INDICATORS=(
   ["npm"]="package.json"
@@ -224,6 +228,25 @@ echo "  Scanning for Project Files"
 echo "----------------------------------------------"
 echo ""
 
+# Determine which ecosystems to scan for: either the full supported set,
+# or a user-provided subset (via ECOSYSTEMS_FILTER)
+if [[ -n "$ECOSYSTEMS_FILTER" ]]; then
+  declare -a ECOSYSTEMS_TO_CHECK=()
+  IFS=',' read -ra REQUESTED_ECOSYSTEMS <<< "$ECOSYSTEMS_FILTER"
+  for requested in "${REQUESTED_ECOSYSTEMS[@]}"; do
+    requested="$(echo "$requested" | xargs)"
+    [[ -z "$requested" ]] && continue
+    if [[ -v "ECOSYSTEM_INDICATORS[$requested]" ]]; then
+      ECOSYSTEMS_TO_CHECK+=("$requested")
+    else
+      echo -e "${YELLOW}Warning${NC}: unknown ecosystem '$requested' ignored"
+    fi
+  done
+  echo ""
+else
+  ECOSYSTEMS_TO_CHECK=("${!ECOSYSTEM_INDICATORS[@]}")
+fi
+
 # Track results
 declare -a FOUND_RESULTS=()
 declare -a MISSING_RESULTS=()
@@ -231,7 +254,7 @@ TOTAL_ECOSYSTEMS=0
 MISSING_COUNT=0
 
 # First check root directory
-for ecosystem in "${!ECOSYSTEM_INDICATORS[@]}"; do
+for ecosystem in "${ECOSYSTEMS_TO_CHECK[@]}"; do
   if check_ecosystem_in_dir "$ecosystem" "${ECOSYSTEM_INDICATORS[$ecosystem]}" "$REPO_ROOT"; then
     TOTAL_ECOSYSTEMS=$((TOTAL_ECOSYSTEMS + 1))
     local_dir="/"
