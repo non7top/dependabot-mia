@@ -33,8 +33,6 @@
     "docker:clean": "docker compose down --rmi local -v"
   },
   "dependencies": {
-    "@sample-lib/utils": "^1.0.0",
-    "@sample-lib/components": "^2.0.0",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "three": "^0.183.2"
